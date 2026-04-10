@@ -1,3 +1,4 @@
 /target
+.deploy-sc.toml
 .deploy-workspace/
 .idea/
