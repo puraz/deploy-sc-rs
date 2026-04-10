@@ -207,7 +207,10 @@ fn validate_git_remote(config: &GitConfig, raw_url: &str) -> Result<()> {
         message: "git.base_url 不是合法 URL".to_string(),
     })?;
 
-    if target.scheme() != "https" || base.scheme() != "https" {
+    if !is_supported_http_scheme(target.scheme())
+        || !is_supported_http_scheme(base.scheme())
+        || target.scheme() != base.scheme()
+    {
         return Err(DeployError::UnsupportedGitUrl {
             url: raw_url.to_string(),
         }
@@ -232,6 +235,10 @@ fn validate_git_remote(config: &GitConfig, raw_url: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn is_supported_http_scheme(scheme: &str) -> bool {
+    matches!(scheme, "http" | "https")
 }
 
 fn current_remote_url(repo_dir: &Path) -> Result<String> {
@@ -316,7 +323,7 @@ mod tests {
     use super::{build_git_auth, validate_git_remote};
 
     #[test]
-    fn reject_non_https_url() {
+    fn reject_non_http_url() {
         let config = GitConfig {
             base_url: "https://git.example.com".to_string(),
             username: "ci".to_string(),
@@ -341,5 +348,16 @@ mod tests {
             auth.redacted_header,
             "http.extraHeader=AUTHORIZATION: Basic ***"
         );
+    }
+
+    #[test]
+    fn accept_http_url() {
+        let config = GitConfig {
+            base_url: "http://git.example.com/scm".to_string(),
+            username: "ci".to_string(),
+            password: "pwd".to_string(),
+        };
+
+        assert!(validate_git_remote(&config, "http://git.example.com/scm/demo/repo.git").is_ok());
     }
 }

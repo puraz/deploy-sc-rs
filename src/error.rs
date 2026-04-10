@@ -22,7 +22,7 @@ pub enum DeployError {
     #[error("Git 远程 origin 未配置 URL")]
     MissingGitRemoteUrl,
 
-    #[error("Git 仓库地址仅支持 HTTPS：{url}")]
+    #[error("Git 仓库地址仅支持 HTTP/HTTPS：{url}")]
     UnsupportedGitUrl { url: String },
 
     #[error("Git 仓库地址与配置的 git.base_url 不匹配：{url}")]
@@ -86,7 +86,7 @@ impl DeployError {
                 "请确认仓库已配置 origin 远程地址，或在 clone 模式下显式传入 --git-url。".to_string()
             }
             Self::UnsupportedGitUrl { .. } => {
-                "当前版本只支持 HTTPS 协议的 Git 仓库地址，请改用 https://... 形式的仓库 URL。"
+                "当前版本只支持 HTTP/HTTPS 协议的 Git 仓库地址，请改用 http://... 或 https://... 形式的仓库 URL。"
                     .to_string()
             }
             Self::GitBaseUrlMismatch { .. } => {

@@ -41,7 +41,7 @@ token = "secret-token"
 
 说明：
 
-- Git 当前仅支持 `HTTPS 用户名 + 密码`
+- Git 当前支持 `HTTP/HTTPS 用户名 + 密码`
 - `git.base_url` 要与 `--git-url` 或仓库的 `origin` 地址属于同一 Git 服务
 - `registry.password` 与 `registry.token` 必须二选一
 
