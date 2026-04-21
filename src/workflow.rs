@@ -38,13 +38,13 @@ pub async fn run(cli: Cli) -> Result<()> {
         let _jar = build::package_if_needed(&ctx, &project_spec).await?;
     }
 
-    ui::print_stage_start("BuildImage", "开始构建 Docker 镜像");
-    docker::build_image(&ctx, &project_spec, &image).await?;
-    ui::print_stage_success("BuildImage", "镜像构建完成");
-
     ui::print_stage_start("DockerLogin", "开始登录 Docker 仓库");
     docker::login(&ctx, &project_config).await?;
     ui::print_stage_success("DockerLogin", "Docker 仓库登录成功");
+
+    ui::print_stage_start("BuildImage", "开始构建 Docker 镜像");
+    docker::build_image(&ctx, &project_spec, &image).await?;
+    ui::print_stage_success("BuildImage", "镜像构建完成");
 
     ui::print_stage_start("PushImage", "开始推送镜像");
     docker::push_image(&ctx, &image).await?;

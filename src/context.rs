@@ -147,12 +147,9 @@ mod tests {
     use super::{ensure_within, normalize_path, validate_build_args};
 
     #[test]
-    fn normalize_windows_like_path() {
-        let path = PathBuf::from(r"C:\workspace\demo\.\child\..\repo");
-        assert_eq!(
-            normalize_path(&path),
-            PathBuf::from(r"C:\workspace\demo\repo")
-        );
+    fn normalize_dot_segments() {
+        let path = PathBuf::from("/workspace/demo/./child/../repo");
+        assert_eq!(normalize_path(&path), PathBuf::from("/workspace/demo/repo"));
     }
 
     #[test]

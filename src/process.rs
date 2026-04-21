@@ -65,14 +65,14 @@ pub async fn run_streamed(spec: &CommandSpec) -> Result<()> {
         .spawn()
         .with_context(|| format!("启动命令失败：{}", spec.display_command()))?;
 
-    if let Some(stdin_text) = &spec.stdin_text {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(stdin_text.as_bytes())
-                .await
-                .context("向子进程写入 stdin 失败")?;
-            stdin.write_all(b"\n").await.context("写入换行失败")?;
-        }
+    if let Some(stdin_text) = &spec.stdin_text
+        && let Some(mut stdin) = child.stdin.take()
+    {
+        stdin
+            .write_all(stdin_text.as_bytes())
+            .await
+            .context("向子进程写入 stdin 失败")?;
+        stdin.write_all(b"\n").await.context("写入换行失败")?;
     }
 
     let stderr_tail: Arc<Mutex<VecDeque<String>>> =

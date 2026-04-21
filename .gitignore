@@ -2,3 +2,4 @@
 .deploy-sc.toml
 .deploy-workspace/
 .idea/
+.omx/

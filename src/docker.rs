@@ -16,6 +16,10 @@ pub async fn build_image(
     ensure_within(&ctx.base_dir, &spec.dockerfile_path)?;
     ensure_within(&ctx.base_dir, &spec.build_context_dir)?;
 
+    run_streamed(&build_image_command(ctx, spec, image)).await
+}
+
+fn build_image_command(ctx: &RunContext, spec: &ProjectSpec, image: &ImageMetadata) -> CommandSpec {
     let mut args = vec![
         "build".to_string(),
         "-f".to_string(),
@@ -30,16 +34,18 @@ pub async fn build_image(
     }
     args.push(path_to_string(&spec.build_context_dir));
 
-    run_streamed(&CommandSpec {
+    CommandSpec {
         stage: "BuildImage",
         program: "docker".to_string(),
         args,
         display_override: None,
         workdir: Some(ctx.base_dir.clone()),
-        envs: vec![],
+        envs: vec![(
+            "DOCKER_CONFIG".to_string(),
+            path_to_string(&ctx.docker_config_dir),
+        )],
         stdin_text: None,
-    })
-    .await
+    }
 }
 
 /// 使用项目内凭证执行 docker login，并将配置隔离在工作目录内。
@@ -48,7 +54,11 @@ pub async fn login(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
     std::fs::create_dir_all(&ctx.docker_config_dir)?;
     let registry = config.registry()?;
 
-    run_streamed(&CommandSpec {
+    run_streamed(&login_command(ctx, registry)).await
+}
+
+fn login_command(ctx: &RunContext, registry: &crate::config::RegistryConfig) -> CommandSpec {
+    CommandSpec {
         stage: "DockerLogin",
         program: "docker".to_string(),
         args: vec![
@@ -68,8 +78,7 @@ pub async fn login(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
             path_to_string(&ctx.docker_config_dir),
         )],
         stdin_text: Some(registry.registry_secret().to_string()),
-    })
-    .await
+    }
 }
 
 /// 推送镜像到远端仓库。
@@ -88,4 +97,112 @@ pub async fn push_image(ctx: &RunContext, image: &ImageMetadata) -> Result<()> {
         stdin_text: None,
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use crate::{
+        cli::{AcquireMode, BuildToolArg, Cli, ProjectType},
+        config::RegistryConfig,
+        context::{ImageMetadata, ProjectSpec, RunContext},
+    };
+
+    use super::{build_image_command, login_command};
+
+    fn test_cli() -> Cli {
+        Cli {
+            git_url: None,
+            branch: "release".to_string(),
+            project_type: Some(ProjectType::Web),
+            java_layout: None,
+            module: None,
+            build_tool: BuildToolArg::Auto,
+            image: "registry.example.com/team/app".to_string(),
+            tag: None,
+            build_args: vec![],
+            mode: AcquireMode::Auto,
+            force_clean: false,
+            workspace_dir: ".deploy-workspace".into(),
+        }
+    }
+
+    fn test_image() -> ImageMetadata {
+        ImageMetadata {
+            image: "registry.example.com/team/app".to_string(),
+            tag: "release-abc1234".to_string(),
+            full_name: "registry.example.com/team/app:release-abc1234".to_string(),
+            branch: "release".to_string(),
+            short_sha: "abc1234".to_string(),
+        }
+    }
+
+    fn test_context(temp: &TempDir) -> RunContext {
+        let base_dir = temp.path().to_path_buf();
+        let workspace_dir = base_dir.join(".deploy-workspace");
+        let docker_config_dir = workspace_dir.join(".docker");
+        RunContext {
+            cli: test_cli(),
+            base_dir,
+            workspace_dir,
+            docker_config_dir,
+        }
+    }
+
+    #[test]
+    fn build_image_uses_isolated_docker_config() {
+        let temp = TempDir::new().expect("tempdir");
+        let ctx = test_context(&temp);
+        let dockerfile_path = ctx.repo_dir().join("Dockerfile");
+        let spec = ProjectSpec {
+            project_type: ProjectType::Web,
+            java_layout: None,
+            module_name: None,
+            build_tool: None,
+            build_tool_command: None,
+            project_root: ctx.repo_dir().to_path_buf(),
+            dockerfile_path,
+            build_context_dir: ctx.repo_dir().to_path_buf(),
+            artifact_search_dir: None,
+        };
+
+        let command = build_image_command(&ctx, &spec, &test_image());
+
+        assert_eq!(
+            command.envs,
+            vec![(
+                "DOCKER_CONFIG".to_string(),
+                ctx.docker_config_dir.to_string_lossy().to_string(),
+            )]
+        );
+    }
+
+    #[test]
+    fn login_uses_password_stdin_with_isolated_docker_config() {
+        let temp = TempDir::new().expect("tempdir");
+        let ctx = test_context(&temp);
+        let registry = RegistryConfig {
+            server: "registry.example.com".to_string(),
+            username: "ci".to_string(),
+            password: Some("secret".to_string()),
+            token: None,
+        };
+
+        let command = login_command(&ctx, &registry);
+
+        assert_eq!(command.stage, "DockerLogin");
+        assert_eq!(command.stdin_text.as_deref(), Some("secret"));
+        assert_eq!(
+            command.display_command(),
+            "docker login registry.example.com --username ci --password-stdin"
+        );
+        assert_eq!(
+            command.envs,
+            vec![(
+                "DOCKER_CONFIG".to_string(),
+                ctx.docker_config_dir.to_string_lossy().to_string(),
+            )]
+        );
+    }
 }
