@@ -257,11 +257,10 @@ mod tests {
     #[test]
     fn detect_web_project_from_explicit_type() {
         let temp = TempDir::new().expect("tempdir");
-        fs::write(temp.path().join("Dockerfile"), "FROM scratch").expect("write dockerfile");
         std::env::set_current_dir(temp.path()).expect("set cwd");
 
         let ctx = RunContext::from_cli(Cli {
-            git_url: None,
+            git_url: Some("https://git.example.com/team/web.git".to_string()),
             branch: "master".to_string(),
             project_type: Some(ProjectType::Web),
             java_layout: None,
@@ -272,9 +271,11 @@ mod tests {
             build_args: vec![],
             mode: AcquireMode::Auto,
             force_clean: false,
-            workspace_dir: ".".into(),
+            workspace_dir: ".deploy-workspace".into(),
         })
         .expect("context");
+        fs::create_dir_all(ctx.repo_dir()).expect("create repo dir");
+        fs::write(ctx.repo_dir().join("Dockerfile"), "FROM scratch").expect("write dockerfile");
 
         let spec = detect_project(&ctx).expect("detect project");
         assert_eq!(spec.project_type, ProjectType::Web);

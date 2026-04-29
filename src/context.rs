@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Result, ensure};
+use url::Url;
 
 use crate::{
     cli::{AcquireMode, Cli, JavaLayout, ProjectType},
@@ -18,6 +19,7 @@ pub struct RunContext {
     pub cli: Cli,
     pub base_dir: PathBuf,
     pub workspace_dir: PathBuf,
+    pub repo_dir: PathBuf,
     pub docker_config_dir: PathBuf,
 }
 
@@ -60,12 +62,16 @@ impl RunContext {
         let base_dir = std::env::current_dir()?;
         let workspace_dir = normalize_path(&base_dir.join(&cli.workspace_dir));
         ensure_within(&base_dir, &workspace_dir)?;
+        let repo_key = derive_repo_key(cli.git_url.as_deref().ok_or(DeployError::MissingGitUrl)?)?;
+        let repo_dir = normalize_path(&workspace_dir.join(repo_key));
+        ensure_within(&base_dir, &repo_dir)?;
 
-        let docker_config_dir = workspace_dir.join(".docker");
+        let docker_config_dir = repo_dir.join(".docker");
         Ok(Self {
             cli,
             base_dir,
             workspace_dir,
+            repo_dir,
             docker_config_dir,
         })
     }
@@ -74,7 +80,7 @@ impl RunContext {
     pub fn effective_mode(&self) -> AcquireMode {
         match self.cli.mode {
             AcquireMode::Auto => {
-                if self.workspace_dir.join(".git").is_dir() {
+                if self.repo_dir.join(".git").is_dir() {
                     AcquireMode::Pull
                 } else {
                     AcquireMode::Clone
@@ -86,7 +92,7 @@ impl RunContext {
 
     /// 当前部署的仓库根目录始终就是实际工作目录。
     pub fn repo_dir(&self) -> &Path {
-        &self.workspace_dir
+        &self.repo_dir
     }
 
     /// 如有需要，创建部署工作目录。
@@ -94,6 +100,68 @@ impl RunContext {
         fs::create_dir_all(&self.workspace_dir)?;
         Ok(())
     }
+}
+
+fn derive_repo_key(raw_url: &str) -> Result<String> {
+    let url = Url::parse(raw_url).map_err(|_| DeployError::UnsupportedGitUrl {
+        url: raw_url.to_string(),
+    })?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(DeployError::UnsupportedGitUrl {
+            url: raw_url.to_string(),
+        }
+        .into());
+    }
+
+    let host = url.host_str().ok_or(DeployError::UnsupportedGitUrl {
+        url: raw_url.to_string(),
+    })?;
+    let mut parts = vec![sanitize_key_part(host)];
+    if let Some(port) = url.port() {
+        parts.push(port.to_string());
+    }
+
+    let mut path_parts = url
+        .path_segments()
+        .into_iter()
+        .flatten()
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| {
+            let without_git = segment.strip_suffix(".git").unwrap_or(segment);
+            sanitize_key_part(without_git)
+        })
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+
+    if path_parts.is_empty() {
+        return Err(DeployError::UnsupportedGitUrl {
+            url: raw_url.to_string(),
+        }
+        .into());
+    }
+
+    parts.append(&mut path_parts);
+    Ok(parts.join("_"))
+}
+
+fn sanitize_key_part(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut previous_was_sep = false;
+
+    for ch in input.chars() {
+        let normalized = if ch.is_ascii_alphanumeric() { ch } else { '_' };
+        if normalized == '_' {
+            if previous_was_sep {
+                continue;
+            }
+            previous_was_sep = true;
+        } else {
+            previous_was_sep = false;
+        }
+        out.push(normalized);
+    }
+
+    out.trim_matches('_').to_string()
 }
 
 /// 校验 `--build-arg` 是否满足 `KEY=VALUE` 结构。
@@ -144,7 +212,9 @@ pub fn ensure_within(base: &Path, target: &Path) -> Result<()> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{ensure_within, normalize_path, validate_build_args};
+    use super::{
+        derive_repo_key, ensure_within, normalize_path, sanitize_key_part, validate_build_args,
+    };
 
     #[test]
     fn normalize_dot_segments() {
@@ -163,5 +233,17 @@ mod tests {
         let base = PathBuf::from(r"C:\workspace\demo");
         let target = PathBuf::from(r"C:\workspace\other");
         assert!(ensure_within(&base, &target).is_err());
+    }
+
+    #[test]
+    fn derive_repo_key_from_host_and_path() {
+        let key =
+            derive_repo_key("https://git.company.local/team-a/api.git").expect("derive repo key");
+        assert_eq!(key, "git_company_local_team_a_api");
+    }
+
+    #[test]
+    fn sanitize_key_part_collapses_separators() {
+        assert_eq!(sanitize_key_part("team---x/y"), "team_x_y");
     }
 }

@@ -10,7 +10,7 @@ pub enum DeployError {
     #[error("工作目录非空，执行 clone 前请确认是否允许清空：{path}")]
     WorkspaceNotEmpty { path: PathBuf },
 
-    #[error("首次克隆必须提供 --git-url")]
+    #[error("当前模式必须提供 --git-url，用于定位部署项目目录")]
     MissingGitUrl,
 
     #[error("缺少 Git 凭证配置，请检查 .deploy-sc.toml 中的 [git] 节")]
@@ -72,7 +72,7 @@ impl DeployError {
                 "如果确认可以重建部署工作目录，请追加 --force-clean 后重试。".to_string()
             }
             Self::MissingGitUrl => {
-                "首次克隆时请提供 --git-url；如果工作目录里已有仓库，可改用 --mode pull。"
+                "请显式传入 --git-url；该参数用于在 .deploy-workspace 下定位对应项目子目录。"
                     .to_string()
             }
             Self::MissingGitCredential => {

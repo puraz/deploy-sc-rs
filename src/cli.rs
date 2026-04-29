@@ -12,7 +12,7 @@ use clap::{Parser, ValueEnum};
     about = "精细化自动化部署 CLI，覆盖代码获取、Java 构建、Docker 构建与镜像推送"
 )]
 pub struct Cli {
-    /// Git 仓库地址。首次克隆时必须提供，已有仓库时可省略。
+    /// Git 仓库地址，用于定位部署项目目录。
     #[arg(long)]
     pub git_url: Option<String>,
 
@@ -56,7 +56,7 @@ pub struct Cli {
     #[arg(long)]
     pub force_clean: bool,
 
-    /// 实际部署工作目录，默认固定在当前目录下的 .deploy-workspace。
+    /// 部署工作区根目录，项目仓库会落在其子目录中。
     #[arg(long, default_value = ".deploy-workspace")]
     pub workspace_dir: PathBuf,
 }

@@ -108,7 +108,7 @@ mod tests {
         let temp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_current_dir(temp.path()).expect("cwd");
         let ctx = RunContext::from_cli(Cli {
-            git_url: None,
+            git_url: Some("https://git.example.com/team/app.git".to_string()),
             branch: "feature/demo".to_string(),
             project_type: None,
             java_layout: None,

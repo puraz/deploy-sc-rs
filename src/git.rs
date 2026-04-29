@@ -42,23 +42,22 @@ async fn clone_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
         .ok_or(DeployError::MissingGitUrl)?;
     let auth = build_git_auth(config.git()?, git_url)?;
 
-    let workspace_exists = ctx.workspace_dir.exists();
-    let workspace_has_content =
-        workspace_exists && fs::read_dir(&ctx.workspace_dir)?.next().is_some();
+    let repo_exists = ctx.repo_dir().exists();
+    let repo_has_content = repo_exists && fs::read_dir(ctx.repo_dir())?.next().is_some();
 
-    if workspace_has_content {
+    if repo_has_content {
         if !ctx.cli.force_clean {
             return Err(DeployError::WorkspaceNotEmpty {
-                path: ctx.workspace_dir.clone(),
+                path: ctx.repo_dir().to_path_buf(),
             }
             .into());
         }
 
         ui::print_info(
             "AcquireSource",
-            &format!("清理部署工作目录：{}", ctx.workspace_dir.display()),
+            &format!("清理部署项目目录：{}", ctx.repo_dir().display()),
         );
-        fs::remove_dir_all(&ctx.workspace_dir)?;
+        fs::remove_dir_all(ctx.repo_dir())?;
     }
 
     run_streamed(&CommandSpec {
@@ -69,15 +68,15 @@ async fn clone_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
             auth.actual_header.clone(),
             "clone".to_string(),
             git_url.to_string(),
-            path_to_string(&ctx.workspace_dir),
+            path_to_string(ctx.repo_dir()),
         ],
         display_override: Some(format!(
             "git -c {} clone {} {}",
             auth.redacted_header,
             git_url,
-            path_to_string(&ctx.workspace_dir)
+            path_to_string(ctx.repo_dir())
         )),
-        workdir: Some(ctx.base_dir.clone()),
+        workdir: Some(ctx.workspace_dir.clone()),
         envs: vec![],
         stdin_text: None,
     })
@@ -85,11 +84,11 @@ async fn clone_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
 }
 
 async fn pull_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
-    if !ctx.workspace_dir.join(".git").is_dir() {
+    if !ctx.repo_dir().join(".git").is_dir() {
         return Err(DeployError::ProjectMismatch {
             message: format!(
                 "工作目录 `{}` 不是 Git 仓库，无法执行 pull",
-                ctx.workspace_dir.display()
+                ctx.repo_dir().display()
             ),
         }
         .into());
@@ -108,7 +107,7 @@ async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()>
             program: "git".to_string(),
             args: vec!["checkout".to_string(), branch.clone()],
             display_override: None,
-            workdir: Some(ctx.workspace_dir.clone()),
+            workdir: Some(ctx.repo_dir().to_path_buf()),
             envs: vec![],
             stdin_text: None,
         })
@@ -124,7 +123,7 @@ async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()>
                 format!("origin/{branch}"),
             ],
             display_override: None,
-            workdir: Some(ctx.workspace_dir.clone()),
+            workdir: Some(ctx.repo_dir().to_path_buf()),
             envs: vec![],
             stdin_text: None,
         })
@@ -152,7 +151,7 @@ async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()>
                 "git -c {} pull origin {}",
                 auth.redacted_header, branch
             )),
-            workdir: Some(ctx.workspace_dir.clone()),
+            workdir: Some(ctx.repo_dir().to_path_buf()),
             envs: vec![],
             stdin_text: None,
         })
@@ -178,7 +177,7 @@ async fn fetch_remote(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
             "git -c {} fetch --all --prune",
             auth.redacted_header
         )),
-        workdir: Some(ctx.workspace_dir.clone()),
+        workdir: Some(ctx.repo_dir().to_path_buf()),
         envs: vec![],
         stdin_text: None,
     })

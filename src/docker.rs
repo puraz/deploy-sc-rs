@@ -113,7 +113,7 @@ mod tests {
 
     fn test_cli() -> Cli {
         Cli {
-            git_url: None,
+            git_url: Some("https://git.example.com/team/app.git".to_string()),
             branch: "release".to_string(),
             project_type: Some(ProjectType::Web),
             java_layout: None,
@@ -141,11 +141,13 @@ mod tests {
     fn test_context(temp: &TempDir) -> RunContext {
         let base_dir = temp.path().to_path_buf();
         let workspace_dir = base_dir.join(".deploy-workspace");
-        let docker_config_dir = workspace_dir.join(".docker");
+        let repo_dir = workspace_dir.join("git_example_com_team_app");
+        let docker_config_dir = repo_dir.join(".docker");
         RunContext {
             cli: test_cli(),
             base_dir,
             workspace_dir,
+            repo_dir,
             docker_config_dir,
         }
     }
