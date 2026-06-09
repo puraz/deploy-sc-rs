@@ -36,6 +36,10 @@ pub struct Cli {
     #[arg(long, value_enum, default_value_t = BuildToolArg::Auto)]
     pub build_tool: BuildToolArg,
 
+    /// Java 打包使用的 JDK 根目录，例如 /Library/Java/JavaVirtualMachines/.../Contents/Home。
+    #[arg(long)]
+    pub java_home: Option<PathBuf>,
+
     /// 镜像仓库名，例如 registry.example.com/team/app。
     #[arg(long)]
     pub image: String,
@@ -114,6 +118,7 @@ mod tests {
         assert_eq!(cli.branch, "master");
         assert_eq!(cli.project_type, Some(ProjectType::Web));
         assert_eq!(cli.build_tool, BuildToolArg::Auto);
+        assert_eq!(cli.java_home, None);
         assert_eq!(cli.mode, AcquireMode::Auto);
     }
 }

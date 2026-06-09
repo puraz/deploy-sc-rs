@@ -90,16 +90,11 @@ fn detect_java_project(ctx: &RunContext, repo_dir: PathBuf) -> Result<ProjectSpe
             })
         }
         JavaLayout::Multi => {
-            let module_name = ctx
-                .cli
-                .module
-                .clone()
-                .ok_or(DeployError::MissingModuleName)?;
-
+            let module_name = resolve_java_module(ctx, &repo_dir)?;
             let module_dir = repo_dir.join(&module_name);
             if !module_dir.is_dir() {
                 return Err(DeployError::ModuleNotFound {
-                    module: module_name,
+                    module: module_name.clone(),
                 }
                 .into());
             }
@@ -140,6 +135,12 @@ fn resolve_java_layout(ctx: &RunContext, repo_dir: &Path) -> Result<JavaLayout> 
     }
 
     if ctx.cli.module.is_some() {
+        return Ok(JavaLayout::Multi);
+    }
+
+    let root_has_dockerfile = repo_dir.join("Dockerfile").is_file();
+    let module_candidates = find_java_module_candidates(repo_dir)?;
+    if !root_has_dockerfile && !module_candidates.is_empty() {
         return Ok(JavaLayout::Multi);
     }
 
@@ -211,6 +212,68 @@ fn resolve_build_tool(
     }
 }
 
+fn resolve_java_module(ctx: &RunContext, repo_dir: &Path) -> Result<String> {
+    if let Some(module) = &ctx.cli.module {
+        return Ok(module.clone());
+    }
+
+    let candidates = find_java_module_candidates(repo_dir)?;
+    if candidates.is_empty() {
+        return Err(DeployError::MissingModuleName.into());
+    }
+
+    if candidates.len() == 1 {
+        return Ok(candidates[0].clone());
+    }
+
+    if let Some(image_hint) = image_name_hint(&ctx.cli.image) {
+        let matched: Vec<&String> = candidates
+            .iter()
+            .filter(|candidate| candidate.eq_ignore_ascii_case(image_hint))
+            .collect();
+        if matched.len() == 1 {
+            return Ok(matched[0].clone());
+        }
+    }
+
+    Err(DeployError::ProjectMismatch {
+        message: format!(
+            "检测到多个可部署 Java 模块：{}，请通过 --module 指定目标模块",
+            candidates.join(", ")
+        ),
+    }
+    .into())
+}
+
+fn find_java_module_candidates(repo_dir: &Path) -> Result<Vec<String>> {
+    let mut candidates = vec![];
+
+    for entry in
+        fs::read_dir(repo_dir).with_context(|| format!("读取目录失败：{}", repo_dir.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if !path.join("Dockerfile").is_file() {
+            continue;
+        }
+
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        candidates.push(name.to_string());
+    }
+
+    candidates.sort();
+    Ok(candidates)
+}
+
+fn image_name_hint(image: &str) -> Option<&str> {
+    image.rsplit('/').next().filter(|segment| !segment.is_empty())
+}
+
 fn resolve_wrapper(dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
     candidates
         .iter()
@@ -249,7 +312,7 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::{
-        cli::{AcquireMode, BuildToolArg, Cli, ProjectType},
+        cli::{AcquireMode, BuildToolArg, Cli, JavaLayout, ProjectType},
         context::RunContext,
         detect::detect_project,
     };
@@ -266,6 +329,7 @@ mod tests {
             java_layout: None,
             module: None,
             build_tool: BuildToolArg::Auto,
+            java_home: None,
             image: "repo/app".to_string(),
             tag: None,
             build_args: vec![],
@@ -279,5 +343,132 @@ mod tests {
 
         let spec = detect_project(&ctx).expect("detect project");
         assert_eq!(spec.project_type, ProjectType::Web);
+    }
+
+    #[test]
+    fn detect_java_multi_module_from_unique_child_dockerfile() {
+        let temp = TempDir::new().expect("tempdir");
+        std::env::set_current_dir(temp.path()).expect("set cwd");
+
+        let ctx = RunContext::from_cli(Cli {
+            git_url: Some("https://git.example.com/team/java.git".to_string()),
+            branch: "master".to_string(),
+            project_type: Some(ProjectType::Java),
+            java_layout: None,
+            module: None,
+            build_tool: BuildToolArg::Auto,
+            java_home: None,
+            image: "repo/sellretail-enterprise-admin".to_string(),
+            tag: None,
+            build_args: vec![],
+            mode: AcquireMode::Auto,
+            force_clean: false,
+            workspace_dir: ".deploy-workspace".into(),
+        })
+        .expect("context");
+
+        let repo_dir = ctx.repo_dir();
+        fs::create_dir_all(repo_dir.join("sellretail-enterprise-admin")).expect("create module");
+        fs::write(repo_dir.join("pom.xml"), "<project/>").expect("write pom");
+        fs::write(repo_dir.join("mvnw"), "").expect("write wrapper");
+        fs::write(
+            repo_dir.join("sellretail-enterprise-admin").join("Dockerfile"),
+            "FROM eclipse-temurin:17",
+        )
+        .expect("write dockerfile");
+
+        let spec = detect_project(&ctx).expect("detect project");
+        assert_eq!(spec.project_type, ProjectType::Java);
+        assert_eq!(spec.java_layout, Some(JavaLayout::Multi));
+        assert_eq!(
+            spec.module_name.as_deref(),
+            Some("sellretail-enterprise-admin")
+        );
+        assert_eq!(
+            spec.dockerfile_path,
+            repo_dir
+                .join("sellretail-enterprise-admin")
+                .join("Dockerfile")
+        );
+        assert_eq!(
+            spec.build_context_dir,
+            repo_dir.join("sellretail-enterprise-admin")
+        );
+    }
+
+    #[test]
+    fn detect_java_multi_module_by_image_name_when_multiple_candidates_exist() {
+        let temp = TempDir::new().expect("tempdir");
+        std::env::set_current_dir(temp.path()).expect("set cwd");
+
+        let ctx = RunContext::from_cli(Cli {
+            git_url: Some("https://git.example.com/team/java.git".to_string()),
+            branch: "master".to_string(),
+            project_type: Some(ProjectType::Java),
+            java_layout: None,
+            module: None,
+            build_tool: BuildToolArg::Auto,
+            java_home: None,
+            image: "registry.example.com/team/sellretail-enterprise-admin".to_string(),
+            tag: None,
+            build_args: vec![],
+            mode: AcquireMode::Auto,
+            force_clean: false,
+            workspace_dir: ".deploy-workspace".into(),
+        })
+        .expect("context");
+
+        let repo_dir = ctx.repo_dir();
+        for module in ["sellretail-appuser-api", "sellretail-enterprise-admin"] {
+            fs::create_dir_all(repo_dir.join(module)).expect("create module");
+            fs::write(repo_dir.join(module).join("Dockerfile"), "FROM scratch")
+                .expect("write dockerfile");
+        }
+        fs::write(repo_dir.join("pom.xml"), "<project/>").expect("write pom");
+        fs::write(repo_dir.join("mvnw"), "").expect("write wrapper");
+
+        let spec = detect_project(&ctx).expect("detect project");
+        assert_eq!(
+            spec.module_name.as_deref(),
+            Some("sellretail-enterprise-admin")
+        );
+    }
+
+    #[test]
+    fn reject_ambiguous_java_multi_module_without_module_hint() {
+        let temp = TempDir::new().expect("tempdir");
+        std::env::set_current_dir(temp.path()).expect("set cwd");
+
+        let ctx = RunContext::from_cli(Cli {
+            git_url: Some("https://git.example.com/team/java.git".to_string()),
+            branch: "master".to_string(),
+            project_type: Some(ProjectType::Java),
+            java_layout: None,
+            module: None,
+            build_tool: BuildToolArg::Auto,
+            java_home: None,
+            image: "registry.example.com/team/java-app".to_string(),
+            tag: None,
+            build_args: vec![],
+            mode: AcquireMode::Auto,
+            force_clean: false,
+            workspace_dir: ".deploy-workspace".into(),
+        })
+        .expect("context");
+
+        let repo_dir = ctx.repo_dir();
+        for module in ["module-a", "module-b"] {
+            fs::create_dir_all(repo_dir.join(module)).expect("create module");
+            fs::write(repo_dir.join(module).join("Dockerfile"), "FROM scratch")
+                .expect("write dockerfile");
+        }
+        fs::write(repo_dir.join("pom.xml"), "<project/>").expect("write pom");
+        fs::write(repo_dir.join("mvnw"), "").expect("write wrapper");
+
+        let err = detect_project(&ctx).expect_err("should reject ambiguous module");
+        let message = format!("{err:#}");
+        assert!(message.contains("--module"));
+        assert!(message.contains("module-a"));
+        assert!(message.contains("module-b"));
     }
 }

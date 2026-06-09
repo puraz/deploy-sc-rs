@@ -68,6 +68,7 @@ deploy-sc \
   --project-type java \
   --java-layout single \
   --build-tool maven \
+  --java-home /path/to/jdk8 \
   --image registry.example.com/team/service
 ```
 
@@ -81,6 +82,7 @@ deploy-sc \
   --java-layout multi \
   --module module-a \
   --build-tool gradle \
+  --java-home /path/to/jdk8 \
   --image registry.example.com/team/module-a
 ```
 
@@ -89,6 +91,7 @@ deploy-sc \
 - 默认部署工作区根目录是当前目录下的 `.deploy-workspace/`
 - 每个仓库会按 `host+path` 生成独立子目录，例如 `.deploy-workspace/git_example_com_team_app/`
 - `clone` / `pull` / `auto` 模式都需要传入 `--git-url`，用于定位对应项目子目录
+- Java 项目如需固定使用特定 JDK，可通过 `--java-home` 指定，例如老项目传 JDK 8 根目录
 - 未传 `--tag` 时，版本号格式为 `分支-短提交哈希-时间戳`
 - Docker 登录配置通过 `DOCKER_CONFIG=.deploy-workspace/<repo-key>/.docker` 隔离到项目目录内
 - Git clone / fetch / pull 会读取当前目录根配置中的 `[git]` 认证信息

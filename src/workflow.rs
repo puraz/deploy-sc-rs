@@ -114,6 +114,7 @@ mod tests {
             java_layout: None,
             module: None,
             build_tool: BuildToolArg::Auto,
+            java_home: None,
             image: "registry.example.com/demo/app".to_string(),
             tag: None,
             build_args: vec![],

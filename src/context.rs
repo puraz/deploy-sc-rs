@@ -21,6 +21,7 @@ pub struct RunContext {
     pub workspace_dir: PathBuf,
     pub repo_dir: PathBuf,
     pub docker_config_dir: PathBuf,
+    pub java_home: Option<PathBuf>,
 }
 
 /// Java 构建工具的最终选择结果。
@@ -65,6 +66,19 @@ impl RunContext {
         let repo_key = derive_repo_key(cli.git_url.as_deref().ok_or(DeployError::MissingGitUrl)?)?;
         let repo_dir = normalize_path(&workspace_dir.join(repo_key));
         ensure_within(&base_dir, &repo_dir)?;
+        let java_home = cli.java_home.as_ref().map(|path| {
+            if path.is_absolute() {
+                normalize_path(path)
+            } else {
+                normalize_path(&base_dir.join(path))
+            }
+        });
+
+        if let Some(java_home) = &java_home {
+            if !java_home.is_absolute() {
+                ensure_within(&base_dir, java_home)?;
+            }
+        }
 
         let docker_config_dir = repo_dir.join(".docker");
         Ok(Self {
@@ -73,6 +87,7 @@ impl RunContext {
             workspace_dir,
             repo_dir,
             docker_config_dir,
+            java_home,
         })
     }
 
@@ -99,6 +114,23 @@ impl RunContext {
     pub fn ensure_workspace_dir(&self) -> Result<()> {
         fs::create_dir_all(&self.workspace_dir)?;
         Ok(())
+    }
+
+    pub fn java_envs(&self) -> Vec<(String, String)> {
+        let Some(java_home) = &self.java_home else {
+            return vec![];
+        };
+
+        let java_home_str = java_home.to_string_lossy().to_string();
+        let mut path_parts = vec![java_home.join("bin").to_string_lossy().to_string()];
+        if let Some(existing_path) = std::env::var_os("PATH") {
+            path_parts.push(existing_path.to_string_lossy().to_string());
+        }
+
+        vec![
+            ("JAVA_HOME".to_string(), java_home_str),
+            ("PATH".to_string(), path_parts.join(":")),
+        ]
     }
 }
 
