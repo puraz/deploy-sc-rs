@@ -1,3 +1,4 @@
+/deploy-sc
 /target
 .deploy-sc.toml
 .deploy-workspace/

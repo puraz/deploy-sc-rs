@@ -1,0 +1,26 @@
+# 构建产物
+target/
+deploy-sc
+
+# 本地 workspace（部署时生成）
+.deploy-workspace/
+
+# 版本控制
+.git/
+.gitattributes
+.gitignore
+
+# 本地工具缓存
+.docker/
+
+# 文档和笔记
+README.md
+script.md
+scripts/
+
+# 编辑器与系统文件
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

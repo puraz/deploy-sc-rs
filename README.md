@@ -9,6 +9,44 @@
 - Docker 镜像构建、登录、推送
 - 版本号自动生成与最终结果回显
 
+## 快速开始（容器化运行）
+
+宿主机只需安装 **Docker**，无需本地安装 Git、JDK、Maven、Gradle。
+
+首次使用自动构建工具链镜像，后续直接运行：
+
+```bash
+# 任意目录，只需当前目录有 .deploy-sc.toml 配置
+./scripts/deploy.sh \
+  --git-url https://example.com/demo/web.git \
+  --branch master \
+  --project-type web \
+  --image registry.example.com/team/web-app
+```
+
+强制重新构建镜像：
+
+```bash
+BUILD=1 ./scripts/deploy.sh --help
+```
+
+### 工作原理
+
+`scripts/deploy.sh` 内部执行 `docker run --rm`：
+
+- **挂载 `/var/run/docker.sock`** — 容器内的 `docker build`/`push` 复用宿主机的 Docker daemon
+- **挂载 `$PWD` 到容器内相同路径** — Docker daemon 能直接访问构建上下文文件
+- **工作目录设为 `$PWD`** — 相对路径 `.deploy-sc.toml`、`.deploy-workspace/` 均按预期工作
+- **镜像内预装** Git、JDK 8、Maven 3.9、Gradle 7.6、Docker CLI
+
+## 传统运行方式（本地依赖）
+
+宿主机需安装：Rust（仅编译期）、Git、JDK 8、Maven/Gradle、Docker。
+
+```bash
+cargo run -- ...
+```
+
 ## 配置文件
 
 在执行 `deploy-sc` 的当前目录放置 `.deploy-sc.toml`。该文件会在 `clone` 前读取，所以不能放在尚未拉取下来的目标仓库里。
