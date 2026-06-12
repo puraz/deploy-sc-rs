@@ -99,6 +99,24 @@ pub async fn push_image(ctx: &RunContext, image: &ImageMetadata) -> Result<()> {
     .await
 }
 
+/// 删除本地镜像以释放磁盘空间。
+pub async fn remove_image(ctx: &RunContext, image: &ImageMetadata) -> Result<()> {
+    require_command("docker")?;
+    run_streamed(&CommandSpec {
+        stage: "RemoveImage",
+        program: "docker".to_string(),
+        args: vec!["rmi".to_string(), image.full_name.clone()],
+        display_override: None,
+        workdir: Some(ctx.base_dir.clone()),
+        envs: vec![(
+            "DOCKER_CONFIG".to_string(),
+            path_to_string(&ctx.docker_config_dir),
+        )],
+        stdin_text: None,
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;

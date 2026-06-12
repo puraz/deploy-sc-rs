@@ -50,11 +50,15 @@ pub async fn run(cli: Cli) -> Result<()> {
     docker::push_image(&ctx, &image).await?;
     ui::print_stage_success("PushImage", "镜像推送完成");
 
+    ui::print_stage_start("RemoveImage", "开始清理本地镜像");
+    docker::remove_image(&ctx, &image).await?;
+    ui::print_stage_success("RemoveImage", "本地镜像已删除");
+
     ui::print_stage_success(
         "ReportResult",
         &format!(
-            "部署完成，镜像={}，版本号={}，分支={}，提交={}",
-            image.full_name, image.tag, image.branch, image.short_sha
+            "部署完成\n版本号={}\n镜像={}，分支={}，提交={}",
+            image.tag, image.full_name, image.branch, image.short_sha
         ),
     );
     Ok(())
