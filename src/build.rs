@@ -46,32 +46,28 @@ fn build_java_command_spec(ctx: &RunContext, spec: &ProjectSpec) -> Result<Comma
     let java_envs = ctx.java_envs();
 
     match (build_tool, spec.java_layout) {
-        (EffectiveBuildTool::Maven, Some(JavaLayout::Single)) => {
-            Ok(CommandSpec {
-                stage: "PackageJava",
-                program: path_to_string(command),
-                args: vec![
-                    "clean".to_string(),
-                    "package".to_string(),
-                    "-DskipTests".to_string(),
-                ],
-                display_override: None,
-                workdir: Some(spec.project_root.clone()),
-                envs: java_envs.clone(),
-                stdin_text: None,
-            })
-        }
-        (EffectiveBuildTool::Gradle, Some(JavaLayout::Single)) => {
-            Ok(CommandSpec {
-                stage: "PackageJava",
-                program: path_to_string(command),
-                args: vec!["build".to_string(), "-x".to_string(), "test".to_string()],
-                display_override: None,
-                workdir: Some(spec.project_root.clone()),
-                envs: java_envs.clone(),
-                stdin_text: None,
-            })
-        }
+        (EffectiveBuildTool::Maven, Some(JavaLayout::Single)) => Ok(CommandSpec {
+            stage: "PackageJava",
+            program: path_to_string(command),
+            args: vec![
+                "clean".to_string(),
+                "package".to_string(),
+                "-DskipTests".to_string(),
+            ],
+            display_override: None,
+            workdir: Some(spec.project_root.clone()),
+            envs: java_envs.clone(),
+            stdin_text: None,
+        }),
+        (EffectiveBuildTool::Gradle, Some(JavaLayout::Single)) => Ok(CommandSpec {
+            stage: "PackageJava",
+            program: path_to_string(command),
+            args: vec!["build".to_string(), "-x".to_string(), "test".to_string()],
+            display_override: None,
+            workdir: Some(spec.project_root.clone()),
+            envs: java_envs.clone(),
+            stdin_text: None,
+        }),
         (EffectiveBuildTool::Maven, Some(JavaLayout::Multi)) => {
             let module_name = spec.module_name.as_deref().unwrap_or_default();
             let module_pom = spec.build_context_dir.join("pom.xml");
@@ -238,7 +234,10 @@ mod tests {
         std::env::set_current_dir(temp.path()).expect("cwd");
 
         let java_home = temp.path().join("jdk8");
-        let repo_dir = temp.path().join(".deploy-workspace").join("git_example_com_team_app");
+        let repo_dir = temp
+            .path()
+            .join(".deploy-workspace")
+            .join("git_example_com_team_app");
         fs::create_dir_all(java_home.join("bin")).expect("create java home");
         fs::create_dir_all(&repo_dir).expect("create repo");
 
@@ -274,13 +273,17 @@ mod tests {
         let command = build_command_spec_for_test(&ctx, &spec).expect("command");
         let java_bin = java_home.join("bin").to_string_lossy().to_string();
         let java_home_str = java_home.to_string_lossy().to_string();
-        assert!(command
-            .envs
-            .iter()
-            .any(|(key, value)| key == "JAVA_HOME" && value == &java_home_str));
-        assert!(command
-            .envs
-            .iter()
-            .any(|(key, value)| key == "PATH" && value.starts_with(&java_bin)));
+        assert!(
+            command
+                .envs
+                .iter()
+                .any(|(key, value)| key == "JAVA_HOME" && value == &java_home_str)
+        );
+        assert!(
+            command
+                .envs
+                .iter()
+                .any(|(key, value)| key == "PATH" && value.starts_with(&java_bin))
+        );
     }
 }

@@ -271,7 +271,10 @@ fn find_java_module_candidates(repo_dir: &Path) -> Result<Vec<String>> {
 }
 
 fn image_name_hint(image: &str) -> Option<&str> {
-    image.rsplit('/').next().filter(|segment| !segment.is_empty())
+    image
+        .rsplit('/')
+        .next()
+        .filter(|segment| !segment.is_empty())
 }
 
 fn resolve_wrapper(dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
@@ -372,7 +375,9 @@ mod tests {
         fs::write(repo_dir.join("pom.xml"), "<project/>").expect("write pom");
         fs::write(repo_dir.join("mvnw"), "").expect("write wrapper");
         fs::write(
-            repo_dir.join("sellretail-enterprise-admin").join("Dockerfile"),
+            repo_dir
+                .join("sellretail-enterprise-admin")
+                .join("Dockerfile"),
             "FROM eclipse-temurin:17",
         )
         .expect("write dockerfile");
