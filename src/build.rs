@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -191,7 +192,7 @@ pub fn find_executable_jar(artifact_dir: &Path) -> Result<PathBuf> {
         candidates.push((metadata.len(), path));
     }
 
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    candidates.sort_by_key(|b| Reverse(b.0));
     candidates
         .into_iter()
         .next()
@@ -255,6 +256,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 

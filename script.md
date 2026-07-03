@@ -61,3 +61,13 @@ cargo run --   --git-url http://119.3.246.2:10082/JAVA/sellRetail.git \
 --project-type web \
 --image registry.cn-guangzhou.aliyuncs.com/sell_prod/supply-purchase-h5 \
 --mode auto
+
+# 分拣中心
+./deploy-sc \
+--git-url http://119.3.246.2:10082/JAVA/sellRetail.git \
+--branch master \
+--project-type java \
+--image registry.cn-guangzhou.aliyuncs.com/sell_prod/supply-pickupcenter-api \
+--mode auto \
+--module supply-pickupcenter-api \
+--java-home=/usr/local/jdk1.8.0_201

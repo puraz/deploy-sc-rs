@@ -63,6 +63,14 @@ pub struct Cli {
     /// 部署工作区根目录，项目仓库会落在其子目录中。
     #[arg(long, default_value = ".deploy-workspace")]
     pub workspace_dir: PathBuf,
+
+    /// 跳过 K8s 部署阶段，仅构建并推送镜像。
+    #[arg(long)]
+    pub skip_k8s: bool,
+
+    /// K8s 部署等待 Rollout 就绪的超时秒数。
+    #[arg(long, default_value = "300")]
+    pub k8s_timeout: u64,
 }
 
 /// 支持的项目类型。
@@ -120,5 +128,7 @@ mod tests {
         assert_eq!(cli.build_tool, BuildToolArg::Auto);
         assert_eq!(cli.java_home, None);
         assert_eq!(cli.mode, AcquireMode::Auto);
+        assert!(!cli.skip_k8s);
+        assert_eq!(cli.k8s_timeout, 300);
     }
 }

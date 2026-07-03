@@ -6,7 +6,7 @@ use crate::{
     cli::Cli,
     config::ProjectConfig,
     context::{ImageMetadata, RunContext},
-    detect, docker, git, ui,
+    detect, docker, git, k8s, ui,
 };
 
 /// 严格串行的部署主流程。
@@ -53,6 +53,11 @@ pub async fn run(cli: Cli) -> Result<()> {
     ui::print_stage_start("RemoveImage", "开始清理本地镜像");
     docker::remove_image(&ctx, &image).await?;
     ui::print_stage_success("RemoveImage", "本地镜像已删除");
+
+    // K8s 部署阶段（可选）
+    ui::print_stage_start("K8sDeploy", "开始触发 K8s 部署");
+    k8s::trigger_deployment(&ctx, &project_config, &project_spec, &image).await?;
+    // trigger_deployment 内部已输出成功/跳过信息
 
     ui::print_stage_success(
         "ReportResult",
@@ -125,6 +130,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 

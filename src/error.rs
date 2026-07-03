@@ -62,6 +62,23 @@ pub enum DeployError {
 
     #[error("参数不合法：{message}")]
     InvalidArgument { message: String },
+
+    #[error("K8s 配置错误：{message}")]
+    K8sConfigError { message: String },
+
+    #[error("K8s 部署失败：{namespace}/{deployment} - {message}")]
+    K8sDeployError {
+        namespace: String,
+        deployment: String,
+        message: String,
+    },
+
+    #[error("K8s Rollout 超时：{namespace}/{deployment} 在 {timeout}s 内未就绪")]
+    K8sRolloutTimeout {
+        namespace: String,
+        deployment: String,
+        timeout: u64,
+    },
 }
 
 impl DeployError {
@@ -125,6 +142,18 @@ impl DeployError {
             ),
             Self::InvalidArgument { .. } => {
                 "请修正命令行参数后重试，可先使用 --help 查看完整参数说明。".to_string()
+            }
+            Self::K8sConfigError { .. } => {
+                "请检查 .deploy-sc.toml 中 [k8s] 配置的 kubeconfig 路径是否正确，以及文件权限和格式。"
+                    .to_string()
+            }
+            Self::K8sDeployError { .. } => {
+                "请检查 K8s 集群状态、命名空间和 Deployment 名称是否正确，以及 SA 权限是否足够。"
+                    .to_string()
+            }
+            Self::K8sRolloutTimeout { .. } => {
+                "请检查 Pod 状态（kubectl describe pod）、镜像拉取策略、资源配额，或增大 --k8s-timeout。"
+                    .to_string()
             }
         }
     }

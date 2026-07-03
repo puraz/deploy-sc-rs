@@ -13,6 +13,7 @@ pub const CONFIG_FILE_NAME: &str = ".deploy-sc.toml";
 pub struct ProjectConfig {
     pub git: Option<GitConfig>,
     pub registry: Option<RegistryConfig>,
+    pub k8s: Option<K8sConfig>,
 }
 
 /// Git 服务登录配置。
@@ -57,6 +58,10 @@ impl ProjectConfig {
             registry.validate()?;
         }
 
+        if let Some(k8s) = &self.k8s {
+            k8s.validate()?;
+        }
+
         Ok(())
     }
 
@@ -75,6 +80,11 @@ impl ProjectConfig {
             }
             .into()
         })
+    }
+
+    /// 读取 K8s 部署配置，不存在时返回 None（跳过 K8s 阶段）。
+    pub fn k8s(&self) -> Option<&K8sConfig> {
+        self.k8s.as_ref()
     }
 }
 
@@ -142,6 +152,103 @@ impl RegistryConfig {
             .as_deref()
             .or(self.password.as_deref())
             .expect("validated config must contain either password or token")
+    }
+}
+
+/// Kubernetes 部署配置。
+///
+/// 支持两种风格（二选一）：
+/// - **顶层快捷方式**：直接设置 `kubeconfig` / `namespace` / `deployment` / `container`，用于单 Deployment 场景。
+/// - **数组格式**：`[[k8s.deployments]]` 定义多个 Deployment 目标，每个可带 `module` 字段关联多模块项目子模块。
+#[derive(Debug, Clone, Deserialize)]
+pub struct K8sConfig {
+    /// kubeconfig 文件路径。
+    pub kubeconfig: Option<String>,
+    /// k8s context 名称，可选，默认使用 kubeconfig 的当前 context。
+    pub context: Option<String>,
+    /// 命名空间（顶层快捷方式，与 deployments 互斥）。
+    pub namespace: Option<String>,
+    /// Deployment 名称（顶层快捷方式，与 deployments 互斥）。
+    pub deployment: Option<String>,
+    /// 容器名称（顶层快捷方式，可选，默认与 deployment 同名）。
+    pub container: Option<String>,
+    /// Deployment 目标列表（数组格式，与顶层 namespace/deployment 互斥）。
+    #[serde(default)]
+    pub deployments: Vec<K8sDeploymentTarget>,
+}
+
+/// 单个 K8s Deployment 部署目标。
+#[derive(Debug, Clone, Deserialize)]
+pub struct K8sDeploymentTarget {
+    /// 关联的模块名，仅多模块 Java 项目使用。为空时匹配非模块项目。
+    pub module: Option<String>,
+    /// 命名空间。
+    pub namespace: String,
+    /// Deployment 名称。
+    pub deployment: String,
+    /// 容器名称，可选，默认与 deployment 同名。
+    pub container: Option<String>,
+}
+
+impl K8sConfig {
+    /// 校验 K8s 配置：至少提供一个部署目标。
+    pub fn validate(&self) -> Result<()> {
+        // 校验 kubeconfig
+        if self.kubeconfig.as_ref().is_none_or(|s| s.trim().is_empty()) {
+            return Err(DeployError::CredentialFormat {
+                message: "k8s.kubeconfig 不能为空".to_string(),
+            }
+            .into());
+        }
+
+        let has_top_level = self.namespace.is_some() || self.deployment.is_some();
+        let has_array = !self.deployments.is_empty();
+
+        // 两种风格不能混用
+        if has_top_level && has_array {
+            return Err(DeployError::CredentialFormat {
+                message:
+                    "k8s 配置不能同时使用顶层 namespace/deployment 与数组 deployments，请二选一"
+                        .to_string(),
+            }
+            .into());
+        }
+
+        // 至少需要一种风格
+        if !has_top_level && !has_array {
+            return Err(DeployError::CredentialFormat {
+                message:
+                    "k8s 配置至少需要一个部署目标：顶层 namespace/deployment 或数组 deployments"
+                        .to_string(),
+            }
+            .into());
+        }
+
+        // 顶层风格：deployment 必填
+        if has_top_level && self.deployment.as_ref().is_none_or(|s| s.trim().is_empty()) {
+            return Err(DeployError::CredentialFormat {
+                message: "k8s.deployment 不能为空".to_string(),
+            }
+            .into());
+        }
+
+        // 数组风格：每个条目校验
+        for (i, target) in self.deployments.iter().enumerate() {
+            if target.namespace.trim().is_empty() {
+                return Err(DeployError::CredentialFormat {
+                    message: format!("k8s.deployments[{i}].namespace 不能为空"),
+                }
+                .into());
+            }
+            if target.deployment.trim().is_empty() {
+                return Err(DeployError::CredentialFormat {
+                    message: format!("k8s.deployments[{i}].deployment 不能为空"),
+                }
+                .into());
+            }
+        }
+
+        Ok(())
     }
 }
 

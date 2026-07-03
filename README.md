@@ -25,6 +25,41 @@ username = "docker-user"
 password = "docker-password"
 ```
 
+### K8s 部署配置（可选）
+
+配置后，镜像推送成功会自动触发 Kubernetes Deployment 镜像更新。
+
+**单 Deployment（Web / 单模块 Java）：**
+
+```toml
+[k8s]
+kubeconfig = "/path/to/kube/config"
+context = "ack-cluster"            # 可选，默认使用 kubeconfig 的当前 context
+namespace = "production"
+deployment = "my-app"
+container = "app"                  # 可选，默认与 deployment 同名
+```
+
+**多 Deployment（多模块 Java，每个模块独立工作负载）：**
+
+```toml
+[k8s]
+kubeconfig = "/path/to/kube/config"
+
+[[k8s.deployments]]
+module = "supply-enterprise-admin" # 关联 --module 参数
+namespace = "production"
+deployment = "supply-enterprise-admin"
+container = "app"
+
+[[k8s.deployments]]
+module = "supply-purchaseuser-api"
+namespace = "production"
+deployment = "supply-purchaseuser-api"
+```
+
+如果不配置 `[k8s]` 节，则自动跳过 K8s 部署阶段。
+
 Docker 仓库也可以使用 `token` 替代 `password`：
 
 ```toml
