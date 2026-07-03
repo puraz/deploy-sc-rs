@@ -189,7 +189,9 @@ async fn patch_deployment(
     });
 
     let params = PatchParams::default();
-    api.patch(&target.deployment, &params, &Patch::Merge(&patch))
+    // 使用 Strategic Merge Patch：Kubernetes 根据 container name 匹配，
+    // 只更新 image 字段，保留容器的 env、probe、lifecycle 等其他所有配置。
+    api.patch(&target.deployment, &params, &Patch::Strategic(&patch))
         .await
         .with_context(|| {
             format!(
