@@ -207,8 +207,9 @@ impl K8sConfig {
         // 两种风格不能混用
         if has_top_level && has_array {
             return Err(DeployError::CredentialFormat {
-                message: "k8s 配置不能同时使用顶层 namespace/deployment 与数组 deployments，请二选一"
-                    .to_string(),
+                message:
+                    "k8s 配置不能同时使用顶层 namespace/deployment 与数组 deployments，请二选一"
+                        .to_string(),
             }
             .into());
         }
@@ -216,8 +217,9 @@ impl K8sConfig {
         // 至少需要一种风格
         if !has_top_level && !has_array {
             return Err(DeployError::CredentialFormat {
-                message: "k8s 配置至少需要一个部署目标：顶层 namespace/deployment 或数组 deployments"
-                    .to_string(),
+                message:
+                    "k8s 配置至少需要一个部署目标：顶层 namespace/deployment 或数组 deployments"
+                        .to_string(),
             }
             .into());
         }

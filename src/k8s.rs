@@ -59,10 +59,7 @@ pub async fn trigger_deployment(
     let timeout = Duration::from_secs(ctx.cli.k8s_timeout);
 
     for target in &targets {
-        let container_name = target
-            .container
-            .as_deref()
-            .unwrap_or(&target.deployment);
+        let container_name = target.container.as_deref().unwrap_or(&target.deployment);
 
         ui::print_info(
             "K8sDeploy",
@@ -78,9 +75,7 @@ pub async fn trigger_deployment(
             "K8sDeploy",
             &format!(
                 "等待 Rollout 就绪: {}/{}（超时 {}s）",
-                target.namespace,
-                target.deployment,
-                ctx.cli.k8s_timeout
+                target.namespace, target.deployment, ctx.cli.k8s_timeout
             ),
         );
 
@@ -108,10 +103,7 @@ pub async fn trigger_deployment(
 /// 匹配规则：
 /// - 多模块项目（指定了 --module）：匹配 `deployments[].module == cli.module`
 /// - 非模块项目：匹配 `deployments[]` 中 `module` 为空的条目，或使用顶层快捷方式
-fn resolve_targets(
-    config: &K8sConfig,
-    project_spec: &ProjectSpec,
-) -> Vec<K8sDeploymentTarget> {
+fn resolve_targets(config: &K8sConfig, project_spec: &ProjectSpec) -> Vec<K8sDeploymentTarget> {
     // 数组风格：从 deployments[] 中筛选
     if !config.deployments.is_empty() {
         let is_multi_module = project_spec.module_name.is_some();
@@ -162,15 +154,12 @@ async fn build_client(config: &K8sConfig, kubeconfig_path: &Path) -> Result<Clie
         kubeconfig.current_context = Some(context.clone());
     }
 
-    let kube_config = kube::Config::from_custom_kubeconfig(
-        kubeconfig,
-        &KubeConfigOptions::default(),
-    )
-    .await
-    .context("解析 kubeconfig 失败，请检查文件格式和集群可达性")?;
+    let kube_config =
+        kube::Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
+            .await
+            .context("解析 kubeconfig 失败，请检查文件格式和集群可达性")?;
 
-    let client = Client::try_from(kube_config)
-        .context("创建 K8s 客户端失败")?;
+    let client = Client::try_from(kube_config).context("创建 K8s 客户端失败")?;
 
     Ok(client)
 }
@@ -218,7 +207,11 @@ async fn patch_deployment(
 /// 1. `status.observedGeneration >= metadata.generation`
 /// 2. `status.updatedReplicas >= spec.replicas`
 /// 3. `status.availableReplicas >= spec.replicas`
-async fn watch_rollout(client: &Client, target: &K8sDeploymentTarget, timeout: Duration) -> Result<()> {
+async fn watch_rollout(
+    client: &Client,
+    target: &K8sDeploymentTarget,
+    timeout: Duration,
+) -> Result<()> {
     let api: Api<Deployment> = Api::namespaced(client.clone(), &target.namespace);
     let deadline = tokio::time::Instant::now() + timeout;
     let poll_interval = Duration::from_secs(5);

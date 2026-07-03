@@ -75,9 +75,10 @@ impl RunContext {
         });
 
         if let Some(java_home) = &java_home
-            && !java_home.is_absolute() {
-                ensure_within(&base_dir, java_home)?;
-            }
+            && !java_home.is_absolute()
+        {
+            ensure_within(&base_dir, java_home)?;
+        }
 
         let docker_config_dir = repo_dir.join(".docker");
         Ok(Self {
