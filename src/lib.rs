@@ -6,6 +6,7 @@ pub mod detect;
 pub mod docker;
 pub mod error;
 pub mod git;
+pub mod k8s;
 pub mod process;
 pub mod ui;
 pub mod workflow;

@@ -255,6 +255,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 

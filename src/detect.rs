@@ -339,6 +339,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
         fs::create_dir_all(ctx.repo_dir()).expect("create repo dir");
@@ -367,6 +369,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 
@@ -420,6 +424,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 
@@ -458,6 +464,8 @@ mod tests {
             mode: AcquireMode::Auto,
             force_clean: false,
             workspace_dir: ".deploy-workspace".into(),
+            skip_k8s: false,
+            k8s_timeout: 300,
         })
         .expect("context");
 
