@@ -40,6 +40,11 @@ pub fn print_info(stage: &str, message: &str) {
     println!("[{}] {} {}", timestamp(), stage, message);
 }
 
+/// 打印警告信息。
+pub fn print_warning(stage: &str, message: &str) {
+    println!("[{}] ⚠️ {} {}", timestamp(), stage, message);
+}
+
 /// 为耗时阶段创建 spinner，让用户感知任务仍在推进。
 pub fn start_spinner(stage: &str, message: &str) -> ProgressBar {
     let spinner = ProgressBar::new_spinner();

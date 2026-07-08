@@ -83,7 +83,7 @@ async fn clone_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
     .await
 }
 
-async fn pull_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
+async fn pull_repo(ctx: &RunContext, _config: &ProjectConfig) -> Result<()> {
     if !ctx.repo_dir().join(".git").is_dir() {
         return Err(DeployError::ProjectMismatch {
             message: format!(
@@ -93,8 +93,8 @@ async fn pull_repo(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
         }
         .into());
     }
-
-    fetch_remote(ctx, config).await
+    // fetch 由 checkout_branch 统一执行，此处仅验证仓库状态
+    Ok(())
 }
 
 async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()> {
@@ -112,6 +112,50 @@ async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()>
             stdin_text: None,
         })
         .await?;
+
+        // Pull 模式下，将本地分支硬重置到远程跟踪分支
+        // 确保构建机工作目录与远程完全一致，从根本上消除 git pull 冲突
+        if matches!(ctx.effective_mode(), AcquireMode::Pull) {
+            let has_dirty = !is_worktree_clean(ctx.repo_dir())?;
+            let has_unpushed = has_unpushed_commits(ctx.repo_dir(), branch)?;
+            if has_dirty || has_unpushed {
+                ui::print_warning(
+                    "AcquireSource",
+                    &format!(
+                        "构建机本地存在未推送的变更（未提交={}，未推送Commit={}），\
+                         即将自动重置到 origin/{branch}",
+                        has_dirty, has_unpushed,
+                    ),
+                );
+            }
+
+            run_streamed(&CommandSpec {
+                stage: "AcquireSource",
+                program: "git".to_string(),
+                args: vec![
+                    "reset".to_string(),
+                    "--hard".to_string(),
+                    format!("origin/{branch}"),
+                ],
+                display_override: None,
+                workdir: Some(ctx.repo_dir().to_path_buf()),
+                envs: vec![],
+                stdin_text: None,
+            })
+            .await?;
+
+            // 清理未跟踪文件，避免残留文件影响后续构建
+            run_streamed(&CommandSpec {
+                stage: "AcquireSource",
+                program: "git".to_string(),
+                args: vec!["clean".to_string(), "-fd".to_string()],
+                display_override: None,
+                workdir: Some(ctx.repo_dir().to_path_buf()),
+                envs: vec![],
+                stdin_text: None,
+            })
+            .await?;
+        }
     } else if remote_branch_exists(ctx.repo_dir(), branch)? {
         run_streamed(&CommandSpec {
             stage: "AcquireSource",
@@ -133,29 +177,6 @@ async fn checkout_branch(ctx: &RunContext, config: &ProjectConfig) -> Result<()>
             branch: branch.clone(),
         }
         .into());
-    }
-
-    if matches!(ctx.effective_mode(), AcquireMode::Pull) {
-        let auth = auth_for_origin(config, ctx.repo_dir())?;
-        run_streamed(&CommandSpec {
-            stage: "AcquireSource",
-            program: "git".to_string(),
-            args: vec![
-                "-c".to_string(),
-                auth.actual_header.clone(),
-                "pull".to_string(),
-                "origin".to_string(),
-                branch.clone(),
-            ],
-            display_override: Some(format!(
-                "git -c {} pull origin {}",
-                auth.redacted_header, branch
-            )),
-            workdir: Some(ctx.repo_dir().to_path_buf()),
-            envs: vec![],
-            stdin_text: None,
-        })
-        .await?;
     }
 
     Ok(())
@@ -313,6 +334,35 @@ pub fn current_short_sha(repo_dir: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// 检查工作目录是否有未提交的变更（包括 staged 和 unstaged）。
+fn is_worktree_clean(repo_dir: &Path) -> Result<bool> {
+    let output = StdCommand::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(repo_dir)
+        .output()
+        .context("检查 Git 工作目录状态失败")?;
+
+    // --porcelain 输出为空表示没有未提交变更
+    Ok(output.stdout.is_empty())
+}
+
+/// 检查本地分支是否有未推送到 origin 的 Commit。
+fn has_unpushed_commits(repo_dir: &Path, branch: &str) -> Result<bool> {
+    let output = StdCommand::new("git")
+        .args([
+            "rev-list",
+            "--count",
+            &format!("origin/{branch}..{branch}"),
+        ])
+        .current_dir(repo_dir)
+        .output()
+        .context("检查 Git 未推送 Commit 失败")?;
+
+    let count_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let count: i64 = count_str.parse().unwrap_or(0);
+    Ok(count > 0)
 }
 
 #[cfg(test)]
